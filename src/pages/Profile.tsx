@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,24 +10,67 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Camera, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    full_name: user?.user_metadata?.full_name || '',
-    username: user?.user_metadata?.username || '',
-    bio: user?.user_metadata?.bio || '',
-    phone: user?.user_metadata?.phone || '',
+  const [profile, setProfile] = useState({
+    full_name: '',
+    username: '',
+    bio: '',
+    phone: '',
+    avatar_url: '',
   });
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data) {
+        setProfile({
+          full_name: data.full_name || '',
+          username: data.username || '',
+          bio: data.bio || '',
+          phone: data.phone || '',
+          avatar_url: data.avatar_url || '',
+        });
+      }
+    } catch (error: any) {
+      toast.error('Failed to load profile');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      await updateProfile(formData);
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user?.id,
+          ...profile,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      
       toast.success('Profile updated successfully!');
     } catch (error: any) {
       toast.error(error.message || 'Failed to update profile');
@@ -56,9 +99,9 @@ const Profile = () => {
               {/* Avatar Section */}
               <div className="flex items-center space-x-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={user?.user_metadata?.avatar_url} />
+                  <AvatarImage src={profile.avatar_url} />
                   <AvatarFallback className="bg-blue-600 text-white text-xl">
-                    {formData.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                    {profile.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <Button type="button" variant="outline">
@@ -73,8 +116,8 @@ const Profile = () => {
                   <Label htmlFor="full_name">Full Name</Label>
                   <Input
                     id="full_name"
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    value={profile.full_name}
+                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                     placeholder="Enter your full name"
                   />
                 </div>
@@ -83,8 +126,8 @@ const Profile = () => {
                   <Label htmlFor="username">Username</Label>
                   <Input
                     id="username"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    value={profile.username}
+                    onChange={(e) => setProfile({ ...profile, username: e.target.value })}
                     placeholder="Choose a username"
                   />
                 </div>
@@ -109,8 +152,8 @@ const Profile = () => {
                 <Input
                   id="phone"
                   type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  value={profile.phone}
+                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                   placeholder="Enter your phone number"
                 />
               </div>
@@ -119,8 +162,8 @@ const Profile = () => {
                 <Label htmlFor="bio">Bio</Label>
                 <Textarea
                   id="bio"
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                  value={profile.bio}
+                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                   placeholder="Tell others about yourself"
                   rows={3}
                 />
