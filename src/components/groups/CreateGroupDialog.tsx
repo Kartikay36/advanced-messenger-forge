@@ -43,9 +43,16 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
 
     setLoading(true);
     try {
+      console.log('Creating group:', groupName);
+      
       // Generate invite code
       const { data: inviteCodeResult, error: codeError } = await supabase.rpc('generate_group_invite_code');
-      if (codeError) throw codeError;
+      if (codeError) {
+        console.error('Error generating invite code:', codeError);
+        throw codeError;
+      }
+
+      console.log('Generated invite code:', inviteCodeResult);
 
       // Create group conversation
       const { data: conversation, error: convError } = await supabase
@@ -60,10 +67,15 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
         .select()
         .single();
 
-      if (convError) throw convError;
+      if (convError) {
+        console.error('Error creating conversation:', convError);
+        throw convError;
+      }
+
+      console.log('Created conversation:', conversation.id);
 
       // Add creator as admin
-      await supabase
+      const { error: creatorError } = await supabase
         .from('conversation_participants')
         .insert({
           conversation_id: conversation.id,
@@ -71,9 +83,17 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
           role: 'admin',
         });
 
+      if (creatorError) {
+        console.error('Error adding creator:', creatorError);
+        throw creatorError;
+      }
+
+      console.log('Added creator as admin');
+
       // Add selected members
       if (selectedUsers.length > 0) {
-        await supabase
+        console.log('Adding selected users:', selectedUsers.length);
+        const { error: membersError } = await supabase
           .from('conversation_participants')
           .insert(
             selectedUsers.map(selectedUser => ({
@@ -82,6 +102,13 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
               role: 'member',
             }))
           );
+
+        if (membersError) {
+          console.error('Error adding members:', membersError);
+          throw membersError;
+        }
+
+        console.log('Added members successfully');
       }
 
       toast.success('Group created successfully!');
@@ -92,6 +119,7 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
       setSelectedUsers([]);
       setStep('details');
     } catch (error: any) {
+      console.error('Full error creating group:', error);
       toast.error(error.message || 'Failed to create group');
     } finally {
       setLoading(false);

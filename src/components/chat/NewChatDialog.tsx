@@ -10,7 +10,7 @@ import { Plus, Loader2, MessageCircle } from 'lucide-react';
 import { UserSearch } from '@/components/search/UserSearch';
 import { CreateGroupDialog } from '@/components/groups/CreateGroupDialog';
 import { JoinGroupDialog } from '@/components/groups/JoinGroupDialog';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface NewChatDialogProps {
@@ -27,31 +27,57 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
 
     setLoading(true);
     try {
-      // Check if direct conversation already exists
-      const { data: existingConv, error: checkError } = await supabase
+      console.log('Creating direct chat with user:', selectedUser.id);
+      
+      // Check if direct conversation already exists using a simpler approach
+      const { data: existingConvs, error: checkError } = await supabase
         .from('conversations')
         .select(`
           id,
-          conversation_participants!inner(user_id)
+          is_group
         `)
-        .eq('is_group', false)
-        .eq('conversation_participants.user_id', user.id);
+        .eq('is_group', false);
 
-      if (checkError) throw checkError;
+      if (checkError) {
+        console.error('Error checking existing conversations:', checkError);
+        throw checkError;
+      }
 
-      // Find existing direct conversation with this user
-      const existingDirectChat = existingConv?.find(conv => 
-        conv.conversation_participants.some((p: any) => p.user_id === selectedUser.id) &&
-        conv.conversation_participants.length === 2
-      );
+      console.log('Found conversations:', existingConvs);
+
+      // For each conversation, check if it has exactly 2 participants (current user and selected user)
+      let existingDirectChat = null;
+      if (existingConvs && existingConvs.length > 0) {
+        for (const conv of existingConvs) {
+          const { data: participants, error: participantsError } = await supabase
+            .from('conversation_participants')
+            .select('user_id')
+            .eq('conversation_id', conv.id);
+
+          if (participantsError) {
+            console.error('Error checking participants:', participantsError);
+            continue;
+          }
+
+          if (participants && participants.length === 2) {
+            const userIds = participants.map(p => p.user_id);
+            if (userIds.includes(user.id) && userIds.includes(selectedUser.id)) {
+              existingDirectChat = conv;
+              break;
+            }
+          }
+        }
+      }
 
       if (existingDirectChat) {
+        console.log('Found existing direct chat:', existingDirectChat.id);
         toast.success('Opening existing conversation');
         onChatCreated(existingDirectChat.id);
         setOpen(false);
         return;
       }
 
+      console.log('Creating new conversation...');
       // Create new direct conversation
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
@@ -63,10 +89,15 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
         .select()
         .single();
 
-      if (convError) throw convError;
+      if (convError) {
+        console.error('Error creating conversation:', convError);
+        throw convError;
+      }
+
+      console.log('Created conversation:', conversation.id);
 
       // Add both users as participants
-      await supabase
+      const { error: participantsError } = await supabase
         .from('conversation_participants')
         .insert([
           {
@@ -81,10 +112,17 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
           }
         ]);
 
+      if (participantsError) {
+        console.error('Error adding participants:', participantsError);
+        throw participantsError;
+      }
+
+      console.log('Added participants successfully');
       toast.success('Chat created successfully!');
       onChatCreated(conversation.id);
       setOpen(false);
     } catch (error: any) {
+      console.error('Full error creating chat:', error);
       toast.error(error.message || 'Failed to create chat');
     } finally {
       setLoading(false);
