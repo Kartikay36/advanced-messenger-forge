@@ -12,6 +12,12 @@ interface JoinGroupDialogProps {
   onGroupJoined: (conversationId: string) => void;
 }
 
+interface JoinGroupResponse {
+  success: boolean;
+  conversation_id?: string;
+  error?: string;
+}
+
 export const JoinGroupDialog = ({ onGroupJoined }: JoinGroupDialogProps) => {
   const [open, setOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -31,13 +37,16 @@ export const JoinGroupDialog = ({ onGroupJoined }: JoinGroupDialogProps) => {
 
       if (error) throw error;
 
-      if (data.success) {
+      const result = data as JoinGroupResponse;
+      if (result.success) {
         toast.success('Successfully joined group!');
-        onGroupJoined(data.conversation_id);
+        if (result.conversation_id) {
+          onGroupJoined(result.conversation_id);
+        }
         setOpen(false);
         setInviteCode('');
       } else {
-        toast.error(data.error || 'Failed to join group');
+        toast.error(result.error || 'Failed to join group');
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to join group');

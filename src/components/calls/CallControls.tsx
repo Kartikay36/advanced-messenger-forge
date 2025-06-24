@@ -12,9 +12,20 @@ interface CallControlsProps {
   onCallStart?: (callId: string, callType: 'audio' | 'video') => void;
 }
 
+interface CallSession {
+  id: string;
+  conversation_id: string;
+  caller_id: string;
+  call_type: 'audio' | 'video';
+  status: 'ringing' | 'active' | 'ended' | 'rejected';
+  started_at?: string;
+  ended_at?: string;
+  created_at?: string;
+}
+
 export const CallControls = ({ conversationId, onCallStart }: CallControlsProps) => {
   const { user } = useAuth();
-  const [activeCall, setActiveCall] = useState<any>(null);
+  const [activeCall, setActiveCall] = useState<CallSession | null>(null);
   const [isInCall, setIsInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -33,9 +44,10 @@ export const CallControls = ({ conversationId, onCallStart }: CallControlsProps)
         },
         (payload) => {
           console.log('Call update:', payload);
-          if (payload.new && payload.new.status === 'active') {
-            setActiveCall(payload.new);
-          } else if (payload.new && payload.new.status === 'ended') {
+          const callData = payload.new as CallSession;
+          if (callData && callData.status === 'active') {
+            setActiveCall(callData);
+          } else if (callData && callData.status === 'ended') {
             setActiveCall(null);
             setIsInCall(false);
           }
