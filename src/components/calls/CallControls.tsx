@@ -85,7 +85,8 @@ export const CallControls = ({ conversationId, onCallStart }: CallControlsProps)
           user_id: user.id,
         });
 
-      setActiveCall(callSession);
+      // Cast the database response to our interface type
+      setActiveCall(callSession as CallSession);
       setIsInCall(true);
       onCallStart?.(callSession.id, callType);
       toast.success(`${callType === 'audio' ? 'Audio' : 'Video'} call started`);

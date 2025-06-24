@@ -37,7 +37,7 @@ export const JoinGroupDialog = ({ onGroupJoined }: JoinGroupDialogProps) => {
 
       if (error) throw error;
 
-      const result = data as JoinGroupResponse;
+      const result = data as unknown as JoinGroupResponse;
       if (result.success) {
         toast.success('Successfully joined group!');
         if (result.conversation_id) {
