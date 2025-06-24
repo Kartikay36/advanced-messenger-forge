@@ -6,172 +6,237 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [profile, setProfile] = useState({
-    full_name: '',
-    username: '',
-    bio: '',
-    phone: '',
-    avatar_url: '',
-  });
+  const queryClient = useQueryClient();
+  
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [phone, setPhone] = useState('');
+  const [hideUsername, setHideUsername] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchProfile();
+    if (!authLoading && !user) {
+      navigate('/login');
     }
-  }, [user]);
+  }, [user, authLoading, navigate]);
 
-  const fetchProfile = async () => {
-    try {
+  // Fetch user profile
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
 
-      if (data) {
-        setProfile({
-          full_name: data.full_name || '',
-          username: data.username || '',
-          bio: data.bio || '',
-          phone: data.phone || '',
-          avatar_url: data.avatar_url || '',
-        });
-      }
-    } catch (error: any) {
-      toast.error('Failed to load profile');
+  // Update form when profile data loads
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setUsername(profile.username || '');
+      setBio(profile.bio || '');
+      setPhone(profile.phone || '');
+      setHideUsername(profile.hide_username || false);
     }
-  };
+  }, [profile]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (profileData: any) => {
+      if (!user) throw new Error('No user found');
+
       const { error } = await supabase
         .from('profiles')
         .upsert({
-          id: user?.id,
-          ...profile,
+          id: user.id,
+          full_name: profileData.fullName,
+          username: profileData.username,
+          bio: profileData.bio,
+          phone: profileData.phone,
+          hide_username: profileData.hideUsername,
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
-      
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
       toast.success('Profile updated successfully!');
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       toast.error(error.message || 'Failed to update profile');
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateProfileMutation.mutate({
+      fullName,
+      username,
+      bio,
+      phone,
+      hideUsername,
+    });
   };
 
   const handleAvatarUpdated = (url: string) => {
-    setProfile(prev => ({ ...prev, avatar_url: url }));
+    queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
   };
 
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center mb-6">
-          <Button variant="ghost" onClick={() => navigate('/chat')} className="mr-4">
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center space-x-4 mb-8">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate(-1)}
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Chat
+            Back
           </Button>
-          <h1 className="text-2xl font-bold">Profile Settings</h1>
+          <h1 className="text-3xl font-bold">Profile Settings</h1>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Avatar Section */}
-              <AvatarUpload 
-                avatarUrl={profile.avatar_url}
+        <div className="space-y-6">
+          {/* Profile Photo */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Photo</CardTitle>
+              <CardDescription>
+                Upload a profile photo to help others recognize you
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AvatarUpload
+                avatarUrl={profile?.avatar_url}
                 onAvatarUpdated={handleAvatarUpdated}
               />
+            </CardContent>
+          </Card>
 
-              {/* Form Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Personal Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>
+                Update your personal details and preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Enter your full name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Choose a username"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="full_name">Full Name</Label>
-                  <Input
-                    id="full_name"
-                    value={profile.full_name}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                    placeholder="Enter your full name"
+                  <Label htmlFor="bio">Bio</Label>
+                  <Textarea
+                    id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Tell us about yourself"
+                    rows={3}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="phone">Phone Number</Label>
                   <Input
-                    id="username"
-                    value={profile.username}
-                    onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-                    placeholder="Choose a username"
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Enter your phone number"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Contact support to change your email address
-                </p>
-              </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      {hideUsername ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <Label htmlFor="hideUsername" className="font-medium">
+                        Hide Username from Search
+                      </Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      When enabled, other users won't be able to find you by searching your username
+                    </p>
+                  </div>
+                  <Switch
+                    id="hideUsername"
+                    checked={hideUsername}
+                    onCheckedChange={setHideUsername}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  placeholder="Enter your phone number"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bio">Bio</Label>
-                <Textarea
-                  id="bio"
-                  value={profile.bio}
-                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  placeholder="Tell others about yourself"
-                  rows={3}
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                <Save className="h-4 w-4 mr-2" />
-                {loading ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={updateProfileMutation.isPending}
+                >
+                  {updateProfileMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Profile'
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

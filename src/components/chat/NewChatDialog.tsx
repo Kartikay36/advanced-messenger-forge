@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Loader2, MessageCircle } from 'lucide-react';
+import { UserSearch } from '@/components/search/UserSearch';
+import { CreateGroupDialog } from '@/components/groups/CreateGroupDialog';
+import { JoinGroupDialog } from '@/components/groups/JoinGroupDialog';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -16,29 +20,43 @@ interface NewChatDialogProps {
 export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [chatName, setChatName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleCreateChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !userEmail.trim()) return;
+  const createDirectChat = async (selectedUser: any) => {
+    if (!user) return;
 
     setLoading(true);
     try {
-      // Find user by email
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('id', `%${userEmail.trim()}%`);
+      // Check if direct conversation already exists
+      const { data: existingConv, error: checkError } = await supabase
+        .from('conversations')
+        .select(`
+          id,
+          conversation_participants!inner(user_id)
+        `)
+        .eq('is_group', false)
+        .eq('conversation_participants.user_id', user.id);
 
-      if (profileError) throw profileError;
+      if (checkError) throw checkError;
 
-      // For now, create a direct conversation with a simple name
+      // Find existing direct conversation with this user
+      const existingDirectChat = existingConv?.find(conv => 
+        conv.conversation_participants.some((p: any) => p.user_id === selectedUser.id) &&
+        conv.conversation_participants.length === 2
+      );
+
+      if (existingDirectChat) {
+        toast.success('Opening existing conversation');
+        onChatCreated(existingDirectChat.id);
+        setOpen(false);
+        return;
+      }
+
+      // Create new direct conversation
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
-          name: chatName.trim() || `Chat with ${userEmail}`,
+          name: `Chat with ${selectedUser.full_name || selectedUser.username}`,
           is_group: false,
           created_by: user.id,
         })
@@ -47,20 +65,25 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
 
       if (convError) throw convError;
 
-      // Add creator as participant
+      // Add both users as participants
       await supabase
         .from('conversation_participants')
-        .insert({
-          conversation_id: conversation.id,
-          user_id: user.id,
-          role: 'admin',
-        });
+        .insert([
+          {
+            conversation_id: conversation.id,
+            user_id: user.id,
+            role: 'admin',
+          },
+          {
+            conversation_id: conversation.id,
+            user_id: selectedUser.id,
+            role: 'member',
+          }
+        ]);
 
       toast.success('Chat created successfully!');
       onChatCreated(conversation.id);
       setOpen(false);
-      setChatName('');
-      setUserEmail('');
     } catch (error: any) {
       toast.error(error.message || 'Failed to create chat');
     } finally {
@@ -76,42 +99,42 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
           New Chat
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Start New Chat</DialogTitle>
+          <DialogTitle>Start New Conversation</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreateChat} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="chatName">Chat Name (Optional)</Label>
-            <Input
-              id="chatName"
-              value={chatName}
-              onChange={(e) => setChatName(e.target.value)}
-              placeholder="Enter chat name"
+
+        <Tabs defaultValue="direct" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="direct">
+              <MessageCircle className="h-4 w-4 mr-1" />
+              Direct
+            </TabsTrigger>
+            <TabsTrigger value="create">Create</TabsTrigger>
+            <TabsTrigger value="join">Join</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="direct" className="space-y-4">
+            <UserSearch
+              onUserSelect={createDirectChat}
+              placeholder="Search users to start a chat..."
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="userEmail">User Email</Label>
-            <Input
-              id="userEmail"
-              type="email"
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              placeholder="Enter user email to chat with"
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'Create Chat'
+            {loading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Creating chat...
+              </div>
             )}
-          </Button>
-        </form>
+          </TabsContent>
+
+          <TabsContent value="create">
+            <CreateGroupDialog onGroupCreated={onChatCreated} />
+          </TabsContent>
+
+          <TabsContent value="join">
+            <JoinGroupDialog onGroupJoined={onChatCreated} />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

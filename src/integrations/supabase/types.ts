@@ -9,6 +9,79 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      call_participants: {
+        Row: {
+          call_session_id: string
+          id: string
+          joined_at: string | null
+          left_at: string | null
+          user_id: string
+        }
+        Insert: {
+          call_session_id: string
+          id?: string
+          joined_at?: string | null
+          left_at?: string | null
+          user_id: string
+        }
+        Update: {
+          call_session_id?: string
+          id?: string
+          joined_at?: string | null
+          left_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_participants_call_session_id_fkey"
+            columns: ["call_session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_sessions: {
+        Row: {
+          call_type: string
+          caller_id: string
+          conversation_id: string
+          created_at: string | null
+          ended_at: string | null
+          id: string
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          call_type: string
+          caller_id: string
+          conversation_id: string
+          created_at?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          call_type?: string
+          caller_id?: string
+          conversation_id?: string
+          created_at?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -46,8 +119,10 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           created_by: string
+          group_invite_code: string | null
           id: string
           is_group: boolean | null
+          is_public: boolean | null
           name: string | null
           updated_at: string | null
         }
@@ -55,8 +130,10 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by: string
+          group_invite_code?: string | null
           id?: string
           is_group?: boolean | null
+          is_public?: boolean | null
           name?: string | null
           updated_at?: string | null
         }
@@ -64,8 +141,10 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by?: string
+          group_invite_code?: string | null
           id?: string
           is_group?: boolean | null
+          is_public?: boolean | null
           name?: string | null
           updated_at?: string | null
         }
@@ -140,6 +219,7 @@ export type Database = {
           bio: string | null
           created_at: string | null
           full_name: string | null
+          hide_username: boolean | null
           id: string
           is_online: boolean | null
           last_seen: string | null
@@ -152,6 +232,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
+          hide_username?: boolean | null
           id: string
           is_online?: boolean | null
           last_seen?: string | null
@@ -164,6 +245,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
+          hide_username?: boolean | null
           id?: string
           is_online?: boolean | null
           last_seen?: string | null
@@ -178,7 +260,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_group_invite_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      join_group_by_code: {
+        Args: { invite_code: string }
+        Returns: Json
+      }
+      search_users_by_username: {
+        Args: { search_term: string }
+        Returns: {
+          id: string
+          username: string
+          full_name: string
+          avatar_url: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
