@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,9 +11,10 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Settings, LogOut, MessageCircle } from 'lucide-react';
+import { Search, Settings, LogOut, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { NewChatDialog } from './NewChatDialog';
 
 interface Conversation {
   id: string;
@@ -133,10 +133,7 @@ export const ChatSidebar = ({
 
       {/* New Chat Button */}
       <div className="p-4 border-b border-border">
-        <Button className="w-full" size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          New Chat
-        </Button>
+        <NewChatDialog onChatCreated={onSelectConversation} />
       </div>
 
       {/* Conversations List */}

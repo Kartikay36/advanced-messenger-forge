@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Camera, Save } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { AvatarUpload } from '@/components/profile/AvatarUpload';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -79,6 +79,10 @@ const Profile = () => {
     }
   };
 
+  const handleAvatarUpdated = (url: string) => {
+    setProfile(prev => ({ ...prev, avatar_url: url }));
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
@@ -97,18 +101,10 @@ const Profile = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Avatar Section */}
-              <div className="flex items-center space-x-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile.avatar_url} />
-                  <AvatarFallback className="bg-blue-600 text-white text-xl">
-                    {profile.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <Button type="button" variant="outline">
-                  <Camera className="h-4 w-4 mr-2" />
-                  Change Photo
-                </Button>
-              </div>
+              <AvatarUpload 
+                avatarUrl={profile.avatar_url}
+                onAvatarUpdated={handleAvatarUpdated}
+              />
 
               {/* Form Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

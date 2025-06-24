@@ -2,11 +2,11 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Smile, Paperclip, Mic } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Send, Smile, Mic } from 'lucide-react';
+import { FileUpload } from './FileUpload';
 
 interface MessageInputProps {
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, messageType?: string, fileUrl?: string, fileName?: string, fileSize?: number) => void;
   isLoading: boolean;
 }
 
@@ -17,7 +17,7 @@ export const MessageInput = ({ onSendMessage, isLoading }: MessageInputProps) =>
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim() && !isLoading) {
-      onSendMessage(message);
+      onSendMessage(message.trim());
       setMessage('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -40,14 +40,15 @@ export const MessageInput = ({ onSendMessage, isLoading }: MessageInputProps) =>
     }
   };
 
+  const handleFileUploaded = (fileUrl: string, fileName: string, fileSize: number, messageType: string) => {
+    onSendMessage(`Shared ${messageType}: ${fileName}`, messageType, fileUrl, fileName, fileSize);
+  };
+
   return (
     <div className="bg-card border-t border-border px-6 py-4">
-      <form onSubmit={handleSubmit} className="flex items-end space-x-3">
-        {/* Attachment Button */}
-        <Button type="button" variant="ghost" size="sm" className="mb-2">
-          <Paperclip className="h-4 w-4" />
-        </Button>
-
+      <FileUpload onFileUploaded={handleFileUploaded} />
+      
+      <form onSubmit={handleSubmit} className="flex items-end space-x-3 mt-3">
         {/* Message Input */}
         <div className="flex-1 relative">
           <Textarea

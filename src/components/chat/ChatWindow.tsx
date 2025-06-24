@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -60,7 +59,19 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, messageType = 'text' }: { content: string; messageType?: string }) => {
+    mutationFn: async ({ 
+      content, 
+      messageType = 'text', 
+      fileUrl, 
+      fileName, 
+      fileSize 
+    }: { 
+      content: string; 
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileSize?: number;
+    }) => {
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -68,6 +79,9 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
           sender_id: user!.id,
           content,
           message_type: messageType,
+          file_url: fileUrl,
+          file_name: fileName,
+          file_size: fileSize,
         })
         .select()
         .single();
@@ -119,9 +133,21 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = (
+    content: string, 
+    messageType?: string, 
+    fileUrl?: string, 
+    fileName?: string, 
+    fileSize?: number
+  ) => {
     if (content.trim()) {
-      sendMessageMutation.mutate({ content: content.trim() });
+      sendMessageMutation.mutate({ 
+        content: content.trim(), 
+        messageType, 
+        fileUrl, 
+        fileName, 
+        fileSize 
+      });
     }
   };
 
