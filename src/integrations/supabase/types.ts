@@ -264,6 +264,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      is_conversation_creator: {
+        Args: { conversation_id: string; user_id: string }
+        Returns: boolean
+      }
+      is_conversation_participant: {
+        Args: { conversation_id: string; user_id: string }
+        Returns: boolean
+      }
       join_group_by_code: {
         Args: { invite_code: string }
         Returns: Json

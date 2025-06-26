@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Users, Plus, X, Copy } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import { UserSearch } from '@/components/search/UserSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -25,9 +25,9 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'details' | 'members'>('details');
 
-  const handleUserSelect = (user: any) => {
-    if (!selectedUsers.find(u => u.id === user.id)) {
-      setSelectedUsers([...selectedUsers, user]);
+  const handleUserSelect = (selectedUser: any) => {
+    if (!selectedUsers.find(u => u.id === selectedUser.id)) {
+      setSelectedUsers([...selectedUsers, selectedUser]);
     }
   };
 
@@ -119,7 +119,7 @@ export const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) =>
       setSelectedUsers([]);
       setStep('details');
     } catch (error: any) {
-      console.error('Full error creating group:', error);
+      console.error('Error creating group:', error);
       toast.error(error.message || 'Failed to create group');
     } finally {
       setLoading(false);

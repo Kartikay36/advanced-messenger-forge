@@ -2,8 +2,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Loader2, MessageCircle } from 'lucide-react';
@@ -23,46 +21,60 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
   const [loading, setLoading] = useState(false);
 
   const createDirectChat = async (selectedUser: any) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('You must be logged in to create a chat');
+      return;
+    }
 
     setLoading(true);
     try {
       console.log('Creating direct chat with user:', selectedUser.id);
       
-      // Check if direct conversation already exists using a simpler approach
-      const { data: existingConvs, error: checkError } = await supabase
-        .from('conversations')
+      // Check if direct conversation already exists by looking at participants
+      const { data: existingParticipants, error: participantsError } = await supabase
+        .from('conversation_participants')
         .select(`
-          id,
-          is_group
+          conversation_id,
+          conversations!inner(
+            id,
+            is_group,
+            name
+          )
         `)
-        .eq('is_group', false);
+        .eq('user_id', user.id);
 
-      if (checkError) {
-        console.error('Error checking existing conversations:', checkError);
-        throw checkError;
+      if (participantsError) {
+        console.error('Error checking participants:', participantsError);
+        throw participantsError;
       }
 
-      console.log('Found conversations:', existingConvs);
+      console.log('User participates in conversations:', existingParticipants);
 
-      // For each conversation, check if it has exactly 2 participants (current user and selected user)
+      // For each conversation the user participates in, check if it's a direct chat with the selected user
       let existingDirectChat = null;
-      if (existingConvs && existingConvs.length > 0) {
-        for (const conv of existingConvs) {
-          const { data: participants, error: participantsError } = await supabase
+      if (existingParticipants && existingParticipants.length > 0) {
+        for (const participant of existingParticipants) {
+          const conversation = participant.conversations;
+          
+          // Skip group conversations
+          if (conversation.is_group) continue;
+
+          // Check participants of this conversation
+          const { data: allParticipants, error: allParticipantsError } = await supabase
             .from('conversation_participants')
             .select('user_id')
-            .eq('conversation_id', conv.id);
+            .eq('conversation_id', conversation.id);
 
-          if (participantsError) {
-            console.error('Error checking participants:', participantsError);
+          if (allParticipantsError) {
+            console.error('Error checking all participants:', allParticipantsError);
             continue;
           }
 
-          if (participants && participants.length === 2) {
-            const userIds = participants.map(p => p.user_id);
+          // If this conversation has exactly 2 participants and includes both users
+          if (allParticipants && allParticipants.length === 2) {
+            const userIds = allParticipants.map(p => p.user_id);
             if (userIds.includes(user.id) && userIds.includes(selectedUser.id)) {
-              existingDirectChat = conv;
+              existingDirectChat = conversation;
               break;
             }
           }
@@ -77,7 +89,8 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
         return;
       }
 
-      console.log('Creating new conversation...');
+      console.log('Creating new direct conversation...');
+      
       // Create new direct conversation
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
@@ -97,7 +110,7 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
       console.log('Created conversation:', conversation.id);
 
       // Add both users as participants
-      const { error: participantsError } = await supabase
+      const { error: participantsError2 } = await supabase
         .from('conversation_participants')
         .insert([
           {
@@ -112,9 +125,9 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
           }
         ]);
 
-      if (participantsError) {
-        console.error('Error adding participants:', participantsError);
-        throw participantsError;
+      if (participantsError2) {
+        console.error('Error adding participants:', participantsError2);
+        throw participantsError2;
       }
 
       console.log('Added participants successfully');
@@ -122,7 +135,7 @@ export const NewChatDialog = ({ onChatCreated }: NewChatDialogProps) => {
       onChatCreated(conversation.id);
       setOpen(false);
     } catch (error: any) {
-      console.error('Full error creating chat:', error);
+      console.error('Error creating chat:', error);
       toast.error(error.message || 'Failed to create chat');
     } finally {
       setLoading(false);

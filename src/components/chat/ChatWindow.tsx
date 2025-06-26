@@ -1,6 +1,7 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChatHeader } from './ChatHeader';
 import { MessageList } from './MessageList';
@@ -36,6 +37,7 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       if (error) throw error;
       return data;
     },
+    enabled: !!conversationId,
   });
 
   // Fetch messages
@@ -55,6 +57,7 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!conversationId,
   });
 
   // Send message mutation
@@ -72,11 +75,13 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       fileName?: string;
       fileSize?: number;
     }) => {
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
-          sender_id: user!.id,
+          sender_id: user.id,
           content,
           message_type: messageType,
           file_url: fileUrl,
@@ -100,13 +105,16 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Error sending message:', error);
       toast.error('Failed to send message');
     },
   });
 
   // Set up real-time subscription
   useEffect(() => {
+    if (!conversationId) return;
+
     const channel = supabase
       .channel(`conversation-${conversationId}`)
       .on(
