@@ -36,14 +36,7 @@ const Chat = () => {
         .from('conversations')
         .select(`
           *,
-          conversation_participants!inner(user_id),
-          messages(
-            id,
-            content,
-            created_at,
-            sender_id,
-            profiles:sender_id(full_name, avatar_url)
-          )
+          conversation_participants!inner(user_id)
         `)
         .eq('conversation_participants.user_id', user.id)
         .order('updated_at', { ascending: false });
@@ -52,7 +45,65 @@ const Chat = () => {
         console.error('Error fetching conversations:', error);
         throw error;
       }
-      return data || [];
+
+      if (!data) return [];
+
+      // For each conversation, fetch the latest message separately
+      const conversationsWithMessages = await Promise.all(
+        data.map(async (conversation) => {
+          const { data: messagesData, error: messagesError } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversation.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (messagesError) {
+            console.error('Error fetching messages for conversation:', messagesError);
+            return {
+              ...conversation,
+              messages: []
+            };
+          }
+
+          // Get sender profiles for messages
+          const messageWithProfiles = await Promise.all(
+            (messagesData || []).map(async (message) => {
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('full_name, avatar_url')
+                .eq('id', message.sender_id)
+                .single();
+
+              if (profileError) {
+                console.error('Error fetching profile:', profileError);
+                return {
+                  ...message,
+                  profiles: {
+                    full_name: 'Unknown User',
+                    avatar_url: null
+                  }
+                };
+              }
+
+              return {
+                ...message,
+                profiles: profileData || {
+                  full_name: 'Unknown User',
+                  avatar_url: null
+                }
+              };
+            })
+          );
+
+          return {
+            ...conversation,
+            messages: messageWithProfiles
+          };
+        })
+      );
+
+      return conversationsWithMessages;
     },
     enabled: !!user,
   });

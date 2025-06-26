@@ -28,19 +28,22 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
           conversation_participants(
             user_id,
             role,
-            profiles:user_id(full_name, avatar_url, is_online)
+            profiles!conversation_participants_user_id_fkey(full_name, avatar_url, is_online)
           )
         `)
         .eq('id', conversationId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching conversation:', error);
+        throw error;
+      }
       return data;
     },
     enabled: !!conversationId,
   });
 
-  // Fetch messages
+  // Fetch messages with proper join
   const { data: messages, isLoading } = useQuery({
     queryKey: ['messages', conversationId],
     queryFn: async () => {
@@ -48,13 +51,60 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
         .from('messages')
         .select(`
           *,
-          profiles:sender_id(full_name, avatar_url)
+          profiles!messages_sender_id_fkey(full_name, avatar_url)
         `)
         .eq('conversation_id', conversationId)
         .eq('is_deleted', false)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching messages:', error);
+        // If the foreign key relationship doesn't work, try a different approach
+        const { data: messagesData, error: messagesError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .eq('is_deleted', false)
+          .order('created_at', { ascending: true });
+
+        if (messagesError) {
+          throw messagesError;
+        }
+
+        // Get unique sender IDs
+        const senderIds = [...new Set(messagesData?.map(m => m.sender_id) || [])];
+        
+        // Fetch profiles for all senders
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', senderIds);
+
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+          // Return messages with default profile data
+          return messagesData?.map(message => ({
+            ...message,
+            profiles: {
+              full_name: 'Unknown User',
+              avatar_url: null
+            }
+          })) || [];
+        }
+
+        // Create a map of profiles by ID
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+        // Combine messages with profiles
+        return messagesData?.map(message => ({
+          ...message,
+          profiles: profilesMap.get(message.sender_id) || {
+            full_name: 'Unknown User',
+            avatar_url: null
+          }
+        })) || [];
+      }
+
       return data || [];
     },
     enabled: !!conversationId,
